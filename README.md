@@ -10,10 +10,13 @@ TTS Studio là giao diện chạy cục bộ để dùng chung hai bộ tạo gi
 - `services/text_cleaner.py`: làm sạch và chuẩn hóa văn bản tiếng Việt cho TTS.
 - `services/export_io.py`: hỗ trợ xuất TXT/SRT/VTT.
 - `services/gpu_status.py`: kiểm tra trạng thái NVIDIA GPU.
+- `services/google_tts.py`: tích hợp Google Cloud Text-to-Speech, tải danh sách giọng, tạo MP3 và lưu cấu hình riêng tư.
 - `workers/kokoro_worker.py`: tiến trình xử lý Kokoro theo giao thức JSON-lines. Nếu có môi trường chạy Kokoro sẵn thì dùng lại, nếu chưa có thì ứng dụng tự tạo `runtimes\kokoro\.venv`.
 - `workers/vieneu_worker.py`: tiến trình xử lý VieNeu theo giao thức JSON-lines. Nếu có môi trường chạy VieNeu sẵn thì dùng lại, nếu chưa có thì ứng dụng tự tạo `runtimes\vieneu\.venv`.
 - `voices/user_clones/`: hồ sơ giọng nhân bản do người dùng tạo. Thư mục này không đưa lên GitHub.
 - `outputs/`: các file WAV đã tạo. Thư mục này không đưa lên GitHub.
+- `private/`: cấu hình riêng tư như đường dẫn key Google. Thư mục này không đưa lên GitHub.
+- `cache/`: cache âm thanh Google TTS. Thư mục này không đưa lên GitHub.
 - `logs/`: nhật ký của ứng dụng và các tiến trình xử lý. Thư mục này không đưa lên GitHub.
 
 ## Cài Đặt Cho Máy Mới
@@ -97,6 +100,9 @@ Tập lệnh tắt an toàn sẽ dừng tiến trình xử lý mô hình trướ
 - Khi đổi bộ tạo giọng, ứng dụng sẽ dừng bộ tạo giọng cũ trước rồi mới tải bộ tạo giọng mới.
 - Người dùng có thể chọn chạy bằng GPU, CPU hoặc chế độ tự động trong giao diện.
 - Trang tạo giọng đọc chính cho phép nhập văn bản và tạo âm thanh trực tiếp, không bắt buộc dùng hàng đợi.
+- Trang `TTS Google` chạy bằng Google Cloud Text-to-Speech và tạo file MP3 trong `outputs/google/`.
+- Key Google hoặc thông tin tài khoản API không được lưu trong code. Ứng dụng chỉ lưu đường dẫn tới file key trong `private/google_tts_settings.json`.
+- Có thể xem cấu hình mẫu tại `config/google_tts_settings.example.json`, sau đó chọn file key thật trực tiếp trong giao diện.
 - Kokoro có thể dùng môi trường chạy có sẵn hoặc tự tạo `runtimes\kokoro\.venv`.
 - VieNeu có thể dùng môi trường chạy có sẵn hoặc tự tạo `runtimes\vieneu\.venv` bằng gói chính thức `vieneu`.
 - Hai dự án nguồn Kokoro và VieNeu không bị sửa trực tiếp.
@@ -113,6 +119,7 @@ Kiểm tra ngày 2026-07-05:
 - Có thể nhập SRT và tạo nhiều tác vụ.
 - Kokoro tạo giọng qua ứng dụng và qua API Gradio.
 - VieNeu tạo giọng qua ứng dụng.
+- Trang TTS Google mở được, có fallback voice tiếng Việt, lưu cấu hình riêng tư và báo lỗi rõ khi thiếu key Google.
 - Có thể xuất TXT/SRT/VTT.
 - Có thể dừng tiến trình xử lý để đưa ứng dụng về trạng thái không có bộ tạo giọng đang chạy.
 - Máy chủ Gradio chạy tại `http://127.0.0.1:7870`.
@@ -131,6 +138,8 @@ Kiểm tra ngày 2026-07-05:
 - [x] Bộ chọn GPU/CPU/Tự động.
 - [x] Trang nhân bản giọng có tạo bản nghe thử và lưu hồ sơ giọng nhân bản.
 - [x] Kho giọng gồm giọng Kokoro, giọng VieNeu và giọng nhân bản của người dùng.
+- [x] Trang riêng `TTS Google` cho Google Cloud Text-to-Speech.
+- [x] Tách key Google và cấu hình tài khoản API khỏi repo bằng `private/`, `.gitignore` và file cấu hình mẫu an toàn.
 - [x] Tùy chọn xuất TXT/SRT/VTT và mẫu tên file.
 - [x] Bảng trạng thái GPU.
 - [x] Giữ cơ chế tiến trình xử lý JSON-lines cho Kokoro và VieNeu.

@@ -22,6 +22,23 @@ import gradio as gr
 
 from services.export_io import render_template, write_exports
 from services.gpu_status import get_gpu_status
+from services.google_tts import (
+    AI_MODEL_CHOICES as GOOGLE_AI_MODEL_CHOICES,
+    AI_MODEL_CLOUD_VOICE as GOOGLE_AI_MODEL_CLOUD_VOICE,
+    DEFAULT_CHUNK_CHAR_LIMIT as GOOGLE_DEFAULT_CHUNK_CHAR_LIMIT,
+    DEFAULT_LANGUAGE_CODE as GOOGLE_DEFAULT_LANGUAGE_CODE,
+    FALLBACK_VOICES as GOOGLE_FALLBACK_VOICES,
+    GOOGLE_OUTPUT_DIR,
+    GoogleTtsError,
+    clear_google_cache,
+    credential_status as google_credential_status,
+    fetch_google_voices,
+    generate_google_tts as synthesize_google_tts,
+    load_google_settings,
+    save_google_settings,
+    voice_choices as google_voice_choices,
+    voice_table_rows as google_voice_table_rows,
+)
 from services.subtitle_io import clean_script, parse_subtitle
 from services.text_cleaner import TtsCleanResult, clean_text_for_tts
 from services.task_queue import (
@@ -82,6 +99,7 @@ BOOTSTRAP_LOCK = threading.RLock()
 NAV_CHOICES = [
     "Tổng quan",
     "Tạo giọng đọc",
+    "TTS Google",
     "Kho giọng",
     "Thiết lập",
     "Donate",
@@ -91,6 +109,7 @@ NAV_CHOICES = [
 CREATE_MODE_CHOICES = ["Text to Speech", "Clone Voice"]
 
 VOICE_LIBRARY_HEADERS = ["Loại", "Engine", "ID", "Tên", "Trạng thái", "Ghi chú"]
+GOOGLE_VOICE_HEADERS = ["Voice", "Ngôn ngữ", "Giới tính", "Dòng", "Tần số mẫu", "Nhóm quota"]
 
 
 @dataclass(frozen=True)
@@ -1925,6 +1944,157 @@ def check_runtime_paths():
     return rows, "Đã kiểm tra đường dẫn runtime và model."
 
 
+def _google_voice_update(voices: list[dict[str, Any]], preferred_voice: str | None = None):
+    choices = google_voice_choices(voices)
+    values = [value for _label, value in choices]
+    value = preferred_voice if preferred_voice in values else (values[0] if values else None)
+    return gr.update(choices=choices, value=value, interactive=True)
+
+
+def refresh_google_voices_ui(credential_path: str, language_code: str, preferred_voice: str | None):
+    normalized_language = (language_code or GOOGLE_DEFAULT_LANGUAGE_CODE).strip() or GOOGLE_DEFAULT_LANGUAGE_CODE
+    try:
+        voices = fetch_google_voices(credential_path, normalized_language)
+        if not voices:
+            voices = list(GOOGLE_FALLBACK_VOICES)
+            status = f"Google Cloud không trả voice cho {normalized_language}. Đang dùng danh sách dự phòng."
+        else:
+            status = f"Đã tải {len(voices)} voice từ Google Cloud cho {normalized_language}.\n{google_credential_status(credential_path)}"
+    except Exception as exc:
+        voices = list(GOOGLE_FALLBACK_VOICES)
+        status = (
+            f"Không tải được danh sách voice từ Google Cloud: {exc}\n"
+            "Đang dùng danh sách tiếng Việt dự phòng. Bạn vẫn cần key hợp lệ khi tạo audio."
+        )
+    return _google_voice_update(voices, preferred_voice), google_voice_table_rows(voices), status
+
+
+def save_google_private_settings(
+    credential_path: str,
+    language_code: str,
+    voice_name: str,
+    ai_model: str,
+    max_chars_per_chunk: int,
+):
+    settings_path = save_google_settings(
+        credential_path,
+        language_code,
+        voice_name,
+        ai_model,
+        int(max_chars_per_chunk or GOOGLE_DEFAULT_CHUNK_CHAR_LIMIT),
+    )
+    return (
+        f"Đã lưu cấu hình Google TTS vào file riêng tư: {settings_path}\n"
+        f"{google_credential_status(credential_path)}\n"
+        "File này nằm trong private/ và đã được loại khỏi git."
+    )
+
+
+def clear_google_text():
+    return "", "", None, "", "Đã xóa nội dung Google TTS."
+
+
+def generate_google_direct_tts(
+    text: str,
+    credential_path: str,
+    language_code: str,
+    voice_name: str,
+    ai_model: str,
+    style_instructions: str,
+    speaking_rate: float,
+    pitch: float,
+    max_chars_per_chunk: int,
+    clean_enabled: bool,
+):
+    raw_text = text or ""
+    if clean_enabled:
+        clean_result = clean_text_for_tts(raw_text)
+        text_to_say = clean_result.cleaned
+        clean_details = []
+        if clean_result.transformations:
+            clean_details.append("Biến đổi: " + ", ".join(clean_result.transformations[:12]))
+        if clean_result.warnings:
+            clean_details.append("Lưu ý: " + " ".join(clean_result.warnings))
+        cleaned_preview = text_to_say
+    else:
+        text_to_say = " ".join(raw_text.split())
+        clean_details = ["Không bật bộ làm sạch nâng cao, chỉ chuẩn hóa khoảng trắng."]
+        cleaned_preview = text_to_say
+
+    if not text_to_say:
+        return None, cleaned_preview, "", "Vui lòng nhập văn bản trước khi tạo audio."
+
+    try:
+        result = synthesize_google_tts(
+            text=text_to_say,
+            language_code=language_code or GOOGLE_DEFAULT_LANGUAGE_CODE,
+            voice_name=voice_name,
+            speaking_rate=float(speaking_rate),
+            pitch=float(pitch),
+            credential_path=credential_path,
+            style_instructions=style_instructions,
+            ai_model=ai_model or GOOGLE_AI_MODEL_CLOUD_VOICE,
+            max_chars_per_chunk=int(max_chars_per_chunk or GOOGLE_DEFAULT_CHUNK_CHAR_LIMIT),
+        )
+        save_google_settings(
+            credential_path,
+            language_code or GOOGLE_DEFAULT_LANGUAGE_CODE,
+            voice_name,
+            ai_model or GOOGLE_AI_MODEL_CLOUD_VOICE,
+            int(max_chars_per_chunk or GOOGLE_DEFAULT_CHUNK_CHAR_LIMIT),
+        )
+    except GoogleTtsError as exc:
+        return None, cleaned_preview, "\n".join(clean_details), f"Tạo Google TTS thất bại: {exc}"
+    except Exception as exc:
+        return None, cleaned_preview, "\n".join(clean_details), f"Tạo Google TTS thất bại ngoài dự kiến: {exc}"
+
+    source = "cache" if result.from_cache else "Google API"
+    details_lines = [
+        f"File: {result.audio_path}",
+        f"Voice: {result.voice_name}",
+        f"Ngôn ngữ: {result.language_code}",
+        f"AI model: {result.ai_model}",
+        f"Nguồn: {source}",
+        f"Tổng ký tự: {result.total_characters:,}",
+        f"Ký tự gọi API lần này: {result.characters_billed:,}",
+        f"Số đoạn: {result.chunk_count:,} | tạo mới: {result.chunks_generated:,} | từ cache: {result.chunks_from_cache:,}",
+    ]
+    if clean_details:
+        details_lines.extend(clean_details)
+    if result.style_warning:
+        details_lines.append("Style: " + result.style_warning)
+    elif result.style_applied:
+        details_lines.append("Style: đã gửi kèm request Gemini TTS.")
+    return str(result.audio_path), cleaned_preview, "\n".join(details_lines), f"Đã tạo Google TTS: {result.audio_path.name}"
+
+
+def open_google_output_dir():
+    return open_local_folder(str(GOOGLE_OUTPUT_DIR))
+
+
+def clear_google_cache_ui():
+    removed = clear_google_cache()
+    return f"Đã xóa {removed} file cache Google TTS."
+
+
+def build_google_tts_header_html() -> str:
+    return """
+    <section class="google-tts-hero" aria-labelledby="google-tts-title">
+      <div>
+        <span class="google-kicker">Cloud Text-to-Speech</span>
+        <h1 id="google-tts-title">TTS Google</h1>
+        <p>
+          Trang riêng để dùng Google Cloud Text-to-Speech trong cùng TTS Studio.
+          Key, credential và đường dẫn tài khoản được lưu cục bộ trong private/ và không đưa lên git.
+        </p>
+      </div>
+      <div class="google-tts-meter" aria-hidden="true">
+        <span></span><span></span><span></span><span></span><span></span>
+      </div>
+    </section>
+    """
+
+
 def build_sidebar_brand_html() -> str:
     return f"""
     {build_runtime_global_css()}
@@ -2127,6 +2297,10 @@ def build_demo() -> gr.Blocks:
     initial_model_config = load_model_config()
     initial_model_root = str(initial_model_config.get("model_root") or DEFAULT_MODEL_ROOT)
     initial_recommended_model = str(initial_model_config.get("recommended_model") or "kokoro")
+    initial_google_settings = load_google_settings()
+    initial_google_voices = list(GOOGLE_FALLBACK_VOICES)
+    initial_google_voice_choices = google_voice_choices(initial_google_voices)
+    initial_google_voice = str(initial_google_settings.get("voice_name") or GOOGLE_FALLBACK_VOICES[0]["name"])
 
     with gr.Blocks(title="TTS Studio", elem_classes=["studio-root"]) as demo:
         with gr.Row(elem_classes=["studio-shell"]):
@@ -2268,6 +2442,105 @@ def build_demo() -> gr.Blocks:
                                     btn_unload = gr.Button("Unload", elem_classes=["ghost-button"])
                                 status = gr.Textbox(label="Trạng thái", interactive=False, lines=3)
 
+                with gr.Column(visible=False, elem_classes=["page-block", "google-tts-page"]) as google_page:
+                    gr.HTML(build_google_tts_header_html())
+                    with gr.Row(elem_classes=["google-tts-workbench"]):
+                        with gr.Column(scale=7, min_width=430, elem_classes=["google-main-panel"]):
+                            with gr.Group(elem_classes=["section-card google-editor-card"]):
+                                gr.HTML(
+                                    "<div class='tts-editor-head'><div><span class='tts-step-label'>Google Script</span><h2>Nhập văn bản</h2></div><div class='tts-editor-badges'><span>MP3 output</span><span>Cache local</span></div></div>"
+                                )
+                                google_content = gr.Textbox(
+                                    label="Text",
+                                    lines=10,
+                                    max_lines=18,
+                                    value="Xin chào, đây là bản kiểm tra Google Text-to-Speech trong TTS Studio.",
+                                    placeholder="Nhập nội dung cần tạo giọng đọc bằng Google TTS...",
+                                    show_label=False,
+                                    elem_classes=["tts-script-input"],
+                                )
+                                with gr.Row(elem_classes=["inline-options eleven-options"]):
+                                    google_clean_enabled = gr.Checkbox(value=True, label="Tự làm sạch văn bản trước khi đọc", scale=2)
+                                    btn_google_clear = gr.Button("Xóa văn bản", elem_classes=["danger-link"])
+                                with gr.Row(elem_classes=["action-row tts-generate-bar"]):
+                                    btn_google_generate = gr.Button("Tạo TTS Google", variant="primary", elem_classes=["primary-dark big-action"])
+                                    btn_google_open_output = gr.Button("Mở outputs Google", elem_classes=["ghost-button secondary-action"])
+                                google_cleaned_preview = gr.Textbox(label="Văn bản đã làm sạch", lines=5, interactive=False)
+
+                            with gr.Group(elem_classes=["section-card google-result-card compact-result-card"]):
+                                gr.HTML(
+                                    "<div class='tts-result-head'><div><span class='tts-step-label'>Google Preview</span><h2>Audio đầu ra</h2></div><div class='tts-wave-mini' aria-hidden='true'><span></span><span></span><span></span><span></span><span></span><span></span></div></div>"
+                                )
+                                google_audio = gr.Audio(label="Audio Google", type="filepath", interactive=False)
+                                google_details = gr.Textbox(label="Chi tiết xử lý", interactive=False, lines=7)
+
+                        with gr.Column(scale=3, min_width=300, elem_classes=["google-control-panel"]):
+                            with gr.Group(elem_classes=["right-section google-private-section"]):
+                                gr.HTML("<div class='section-title'>Key riêng tư</div>")
+                                google_credential_path = gr.Textbox(
+                                    value=str(initial_google_settings.get("credential_path") or ""),
+                                    label="Đường dẫn file key JSON",
+                                    placeholder="VD: D:\\keys\\google-tts-service-account.json",
+                                    type="text",
+                                )
+                                gr.Markdown("Chỉ lưu đường dẫn trong `private/google_tts_settings.json`. Không lưu nội dung key.")
+                                google_language = gr.Textbox(
+                                    value=str(initial_google_settings.get("language_code") or GOOGLE_DEFAULT_LANGUAGE_CODE),
+                                    label="Mã ngôn ngữ",
+                                    placeholder=GOOGLE_DEFAULT_LANGUAGE_CODE,
+                                )
+                                with gr.Row(elem_classes=["action-row compact-actions"]):
+                                    btn_google_save_settings = gr.Button("Lưu riêng tư", variant="primary", elem_classes=["primary-dark"])
+                                    btn_google_load_voices = gr.Button("Tải voice", elem_classes=["ghost-button"])
+
+                            with gr.Group(elem_classes=["right-section google-voice-section"]):
+                                gr.HTML("<div class='section-title'>Giọng Google</div>")
+                                google_voice = gr.Dropdown(
+                                    initial_google_voice_choices,
+                                    value=initial_google_voice,
+                                    label="Voice",
+                                    allow_custom_value=True,
+                                )
+                                google_ai_model = gr.Dropdown(
+                                    GOOGLE_AI_MODEL_CHOICES,
+                                    value=str(initial_google_settings.get("ai_model") or GOOGLE_AI_MODEL_CLOUD_VOICE),
+                                    label="AI model",
+                                )
+                                google_style = gr.Textbox(
+                                    label="Style Instructions",
+                                    placeholder="Tùy chọn cho Gemini TTS, ví dụ: đọc ấm áp, rõ ràng, tốc độ vừa phải.",
+                                    lines=3,
+                                )
+
+                            with gr.Group(elem_classes=["right-section google-tune-section"]):
+                                gr.HTML("<div class='section-title'>Điều chỉnh</div>")
+                                google_speed = gr.Slider(0.5, 2.0, value=1.0, step=0.05, label="Tốc độ đọc")
+                                google_pitch = gr.Slider(-20.0, 20.0, value=0.0, step=0.5, label="Pitch")
+                                google_max_chars = gr.Slider(
+                                    500,
+                                    5000,
+                                    value=int(initial_google_settings.get("max_chars_per_chunk") or GOOGLE_DEFAULT_CHUNK_CHAR_LIMIT),
+                                    step=100,
+                                    label="Ký tự mỗi đoạn",
+                                )
+                                with gr.Row(elem_classes=["action-row compact-actions"]):
+                                    btn_google_clear_cache = gr.Button("Xóa cache", elem_classes=["ghost-button"])
+                                google_status = gr.Textbox(
+                                    label="Trạng thái Google TTS",
+                                    value=google_credential_status(initial_google_settings.get("credential_path") or ""),
+                                    interactive=False,
+                                    lines=5,
+                                )
+
+                    with gr.Group(elem_classes=["section-card google-voice-table-card"]):
+                        gr.HTML("<div class='section-title'>Danh sách voice Google</div>")
+                        google_voice_table = gr.Dataframe(
+                            headers=GOOGLE_VOICE_HEADERS,
+                            value=google_voice_table_rows(initial_google_voices),
+                            interactive=False,
+                            wrap=True,
+                        )
+
                 with gr.Column(visible=False, elem_classes=["page-block"]) as library_page:
                     gr.HTML("<div class='page-title'><h1>Kho giọng</h1></div>")
                     with gr.Group(elem_classes=["section-card voice-library-card"]):
@@ -2319,7 +2592,7 @@ def build_demo() -> gr.Blocks:
                         config_table = gr.Dataframe(headers=["Hạng mục", "Đường dẫn", "Trạng thái", "Thư mục"], value=[], interactive=False, wrap=True)
                         config_status = gr.Textbox(label="Trạng thái cài đặt", interactive=False, lines=4)
 
-        page_outputs = [overview_page, create_page, library_page, settings_page, donate_page, config_page]
+        page_outputs = [overview_page, create_page, google_page, library_page, settings_page, donate_page, config_page]
         nav.change(fn=switch_page, inputs=[nav], outputs=page_outputs, queue=False)
         btn_start_create.click(fn=switch_to_create_page, outputs=[nav, *page_outputs], queue=False)
         btn_scan_system.click(
@@ -2353,6 +2626,39 @@ def build_demo() -> gr.Blocks:
             outputs=model_manager_outputs,
         )
         btn_open_model_root.click(fn=open_model_root, inputs=[overview_model_root], outputs=[overview_model_status])
+
+        btn_google_save_settings.click(
+            fn=save_google_private_settings,
+            inputs=[google_credential_path, google_language, google_voice, google_ai_model, google_max_chars],
+            outputs=[google_status],
+        )
+        btn_google_load_voices.click(
+            fn=refresh_google_voices_ui,
+            inputs=[google_credential_path, google_language, google_voice],
+            outputs=[google_voice, google_voice_table, google_status],
+        )
+        btn_google_generate.click(
+            fn=generate_google_direct_tts,
+            inputs=[
+                google_content,
+                google_credential_path,
+                google_language,
+                google_voice,
+                google_ai_model,
+                google_style,
+                google_speed,
+                google_pitch,
+                google_max_chars,
+                google_clean_enabled,
+            ],
+            outputs=[google_audio, google_cleaned_preview, google_details, google_status],
+        )
+        btn_google_clear.click(
+            fn=clear_google_text,
+            outputs=[google_content, google_cleaned_preview, google_audio, google_details, google_status],
+        )
+        btn_google_open_output.click(fn=open_google_output_dir, outputs=[google_status])
+        btn_google_clear_cache.click(fn=clear_google_cache_ui, outputs=[google_status])
 
         create_mode.change(fn=switch_create_mode, inputs=[create_mode], outputs=[tts_mode_panel, clone_mode_panel], queue=False)
         content.change(fn=lambda value: _char_meter(value), inputs=[content], outputs=[char_meter])

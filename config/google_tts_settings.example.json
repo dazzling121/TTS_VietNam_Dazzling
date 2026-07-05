@@ -1,0 +1,7 @@
+{
+  "credential_path": "D:\\path\\to\\google-tts-service-account.json",
+  "language_code": "vi-VN",
+  "voice_name": "vi-VN-Neural2-D",
+  "ai_model": "cloud_voice",
+  "max_chars_per_chunk": 2000
+}
