@@ -135,20 +135,10 @@ Kiểm tra ngày 2026-07-05:
 - [x] Bảng trạng thái GPU.
 - [x] Giữ cơ chế tiến trình xử lý JSON-lines cho Kokoro và VieNeu.
 - [x] Chính sách chỉ một tiến trình xử lý hoạt động tại một thời điểm.
+## Danh Sách Chức Năng Đang Hoàn Thiện
 
-## Dọn Dung Lượng Trước Khi Đưa Lên GitHub
+- [ ] Giao diện TTS Studio có thêm giọng đọc TTS Từ Google cloud sử dụng miễn phí.
+- [ ] Hoàn thiện chức năng đọc và tạo âm thanh theo file subtile của người dùng.
+- [ ] Phát triển chức năng nhận diện subtile video đa ngôn ngữ.
+- [ ] Phát triển chức năng dịch thuật file subtile và render video theo giọng đọc Việt Nam.
 
-Các thư mục sau là dữ liệu tự sinh hoặc dữ liệu cá nhân, không nên đưa lên GitHub:
-
-- `.venv/`
-- `runtimes/`
-- `downloads/`
-- `tools/ffmpeg/`
-- `logs/`
-- `outputs/`
-- `voices/user_clones/`
-- `backups/`
-- `__pycache__/`
-- `model_paths.json`
-
-Các mục này đã được khai báo trong `.gitignore`.
