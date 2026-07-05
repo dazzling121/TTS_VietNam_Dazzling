@@ -1,0 +1,14 @@
+.venv/
+runtimes/
+downloads/
+tools/ffmpeg/
+logs/
+outputs/
+voices/user_clones/
+__pycache__/
+*.pyc
+*.log
+tts_server_*.log
+tts_server_*.err.log
+model_paths.json
+backups/
