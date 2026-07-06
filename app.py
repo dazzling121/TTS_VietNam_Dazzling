@@ -39,6 +39,11 @@ from services.google_tts import (
     voice_choices as google_voice_choices,
     voice_table_rows as google_voice_table_rows,
 )
+from services.project_signature import (
+    SIGNATURE_OWNER,
+    enforce_project_signature,
+    verify_project_signature,
+)
 from services.subtitle_io import clean_script, parse_subtitle
 from services.text_cleaner import TtsCleanResult, clean_text_for_tts
 from services.task_queue import (
@@ -61,6 +66,8 @@ USER_VOICE_DIR = ROOT / "voices" / "user_clones"
 CLONE_OUTPUT_DIR = OUTPUT_DIR / "clones"
 CLONE_DEBUG_LOG = LOG_DIR / "clone_debug.log"
 MODEL_CONFIG_PATH = ROOT / "model_paths.json"
+UPDATE_LOG_PATH = LOG_DIR / "auto_update.log"
+UPDATE_ENV_KEY = "TTS_STUDIO_UPDATE_RESTARTED"
 
 
 def _default_model_root() -> Path:
@@ -155,6 +162,135 @@ PRESETS = {
 DEFAULT_FILENAME_TEMPLATE = "{index}-{voice}-{date}"
 DEFAULT_OUTPUT_FORMATS = [".txt"]
 DEFAULT_NORMALIZE_AUDIO = True
+
+
+def _log_update(message: str) -> None:
+    try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        with UPDATE_LOG_PATH.open("a", encoding="utf-8", errors="replace") as handle:
+            handle.write(f"[{timestamp}] {message}\n")
+    except Exception:
+        pass
+
+
+def _git_output(args: list[str]) -> str:
+    result = subprocess.run(
+        ["git", *args],
+        cwd=str(ROOT),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError((result.stderr or result.stdout or "").strip() or f"Git command failed: {' '.join(args)}")
+    return (result.stdout or "").strip()
+
+
+def _git_is_repo() -> bool:
+    try:
+        return _git_output(["rev-parse", "--is-inside-work-tree"]).strip().lower() == "true"
+    except Exception:
+        return False
+
+
+def _git_current_branch() -> str | None:
+    try:
+        branch = _git_output(["rev-parse", "--abbrev-ref", "HEAD"]).strip()
+        return None if branch == "HEAD" or not branch else branch
+    except Exception:
+        return None
+
+
+def _git_upstream_for_branch(branch: str) -> str | None:
+    try:
+        upstream = _git_output(
+            ["for-each-ref", "--format=%(upstream:short)", f"refs/heads/{branch}"],
+        ).strip()
+        return upstream or None
+    except Exception:
+        return None
+
+
+def _git_worktree_dirty() -> bool:
+    try:
+        return bool(_git_output(["status", "--porcelain"]))
+    except Exception:
+        return True
+
+
+def _git_commit_exists(revision: str) -> bool:
+    try:
+        _git_output(["cat-file", "-e", f"{revision}^{{commit}}"])
+        return True
+    except Exception:
+        return False
+
+
+def _auto_update_repository() -> str:
+    if not _git_is_repo():
+        message = "Auto-update: Skip (not a Git repository)."
+        _log_update(message)
+        return message
+
+    branch = _git_current_branch()
+    if not branch:
+        message = "Auto-update: Skip (detached HEAD)."
+        _log_update(message)
+        return message
+
+    upstream = _git_upstream_for_branch(branch)
+    if not upstream:
+        message = f"Auto-update: Skip (no upstream configured for branch {branch})."
+        _log_update(message)
+        return message
+
+    try:
+        _log_update("Auto-update: Fetching remote updates...")
+        _git_output(["fetch", "origin", "--prune"])
+    except Exception as exc:
+        message = f"Auto-update: Fetch failed: {exc}"
+        _log_update(message)
+        return message
+
+    try:
+        local_head = _git_output(["rev-parse", "HEAD"])
+        remote_head = _git_output(["rev-parse", upstream])
+    except Exception as exc:
+        message = f"Auto-update: Could not read HEAD/revision: {exc}"
+        _log_update(message)
+        return message
+
+    if not _git_commit_exists(remote_head):
+        message = f"Auto-update: Remote head not valid: {remote_head}"
+        _log_update(message)
+        return message
+
+    if local_head == remote_head:
+        message = "Auto-update: Repository already up to date."
+        _log_update(message)
+        return message
+
+    if _git_worktree_dirty():
+        message = (
+            "Auto-update: Update found but local changes are present. "
+            "Skip auto pull to avoid overwrite. Commit/stash your local changes and restart."
+        )
+        _log_update(message)
+        return message
+
+    try:
+        _log_update(f"Auto-update: Updating from {local_head[:7]} -> {remote_head[:7]} ...")
+        _git_output(["pull", "--ff-only", "origin", branch])
+        _log_update("Auto-update: Update completed; restarting app with latest code.")
+        return "UPDATE_APPLIED"
+    except Exception as exc:
+        message = f"Auto-update: Auto pull failed: {exc}"
+        _log_update(message)
+        return message
 
 
 def _default_model_config() -> dict[str, Any]:
@@ -1944,6 +2080,13 @@ def check_runtime_paths():
     return rows, "Đã kiểm tra đường dẫn runtime và model."
 
 
+def check_project_signature():
+    result = verify_project_signature(ROOT)
+    status = "OK" if result.ok else "CANH BAO"
+    details = result.details or ""
+    return f"{status}: {result.status}\nChu ky: {SIGNATURE_OWNER}\nSo file da kiem tra: {result.checked_files}\n{details}"
+
+
 def _google_voice_update(voices: list[dict[str, Any]], preferred_voice: str | None = None):
     choices = google_voice_choices(voices)
     values = [value for _label, value in choices]
@@ -2103,6 +2246,13 @@ def build_sidebar_brand_html() -> str:
       <div>
         <div class="brand-title">TTS<br/>Studio</div>
         <div class="brand-subtitle">Local voice suite</div>
+      </div>
+    </div>
+    <div class="dazzling-signature-badge" title="Project signature verified by Dazzling">
+      <span class="dazzling-signature-mark">D</span>
+      <div>
+        <strong>Dazzling</strong>
+        <small>Verified source</small>
       </div>
     </div>
     """
@@ -2592,6 +2742,16 @@ def build_demo() -> gr.Blocks:
                         config_table = gr.Dataframe(headers=["Hạng mục", "Đường dẫn", "Trạng thái", "Thư mục"], value=[], interactive=False, wrap=True)
                         config_status = gr.Textbox(label="Trạng thái cài đặt", interactive=False, lines=4)
 
+                    with gr.Group(elem_classes=["section-card"]):
+                        gr.HTML("<div class='section-title'>Chu ky du an</div>")
+                        btn_check_signature = gr.Button("Kiem tra chu ky Dazzling", elem_classes=["ghost-button"])
+                        signature_status = gr.Textbox(
+                            label="Trang thai chu ky",
+                            value=check_project_signature(),
+                            interactive=False,
+                            lines=6,
+                        )
+
         page_outputs = [overview_page, create_page, google_page, library_page, settings_page, donate_page, config_page]
         nav.change(fn=switch_page, inputs=[nav], outputs=page_outputs, queue=False)
         btn_start_create.click(fn=switch_to_create_page, outputs=[nav, *page_outputs], queue=False)
@@ -2720,6 +2880,7 @@ def build_demo() -> gr.Blocks:
         btn_unload_settings.click(fn=lambda: manager.unload(), outputs=[settings_status])
         btn_check_runtime.click(fn=check_runtime_paths, outputs=[runtime_table, settings_status])
         btn_config_scan.click(fn=check_runtime_paths, outputs=[config_table, config_status])
+        btn_check_signature.click(fn=check_project_signature, outputs=[signature_status])
 
         demo.load(fn=on_engine_change, inputs=[engine], outputs=[voice, ref_audio, emotion, temperature, status])
         demo.load(fn=on_clone_engine_change, inputs=[clone_engine], outputs=[clone_source_voice, clone_ref_audio, clone_emotion, clone_temperature, clone_status])
@@ -2734,8 +2895,18 @@ def main() -> int:
     parser.add_argument("--share", action="store_true")
     args = parser.parse_args()
 
+    update_status = _auto_update_repository()
+    if update_status == "UPDATE_APPLIED" and os.environ.get(UPDATE_ENV_KEY) != "1":
+        os.environ[UPDATE_ENV_KEY] = "1"
+        python = sys.executable
+        _log_update("Auto-update: Restarting current process after update.")
+        os.execv(python, [python, *sys.argv])
+
+    print(update_status)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
+    signature_result = enforce_project_signature(ROOT)
+    print(signature_result.status)
     demo = build_demo()
     demo.queue(default_concurrency_limit=1).launch(
         server_name=args.server_name,

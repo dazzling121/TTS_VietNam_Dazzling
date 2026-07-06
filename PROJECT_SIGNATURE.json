@@ -1,0 +1,153 @@
+{
+  "owner": "Dazzling",
+  "brand": "TTS Studio",
+  "version": 2,
+  "algorithm": "ed25519-sha256-file-manifest",
+  "lock_file": "services/dazzling_lock.py",
+  "lock_file_sha256": "50730d4dc6eb8871812b4324f0b02e0be9a3aca52217cec300bf03745aeda55b",
+  "public_key_sha256": "1a20c83457de1879f34a037d31085a2e02b3cabe6239911c272fbfcd4ee0fcd7",
+  "files": [
+    {
+      "path": ".gitattributes",
+      "sha256": "b67ee1b447044bc04e6a06043edf31075e210d270010c105ab65b31907565b4b"
+    },
+    {
+      "path": ".gitignore",
+      "sha256": "427f04aa27ed1def67e319fd4d2005371ed13cd731056fd64ea888ef6f97eb26"
+    },
+    {
+      "path": "app.py",
+      "sha256": "c8eff4b4df6f1688b86d9a510ec2b6cc35a74541a07366ebcfea37b5be81cefd"
+    },
+    {
+      "path": "config/google_tts_settings.example.json",
+      "sha256": "6c60d677d1375a47d7e086eb1b7ba161ee5b63ea6d9517afbaf2c190eb6729eb"
+    },
+    {
+      "path": "install_fresh_windows.ps1",
+      "sha256": "c409a73bd16ec6665b87c49c280bc05c10a26dcc8f8d95cb410360aa03bb3f00"
+    },
+    {
+      "path": "install_unix.sh",
+      "sha256": "540f612e1f5fa08cb1906528d477bb4af1c26f1882eb8a402fddc1bcdd094f66"
+    },
+    {
+      "path": "README.md",
+      "sha256": "d53a853a2d7e6b5d05e968f3bf6f58ee89702adef65cf9a1eaf2e600068ade09"
+    },
+    {
+      "path": "requirements.txt",
+      "sha256": "3eb1d49b5b644176873cb727400e5d3de7737ce67bb131b450aab29b2de9f354"
+    },
+    {
+      "path": "run_unified.ps1",
+      "sha256": "6a45c16051d0809a8ee02c89cdfb11980278fac879fcba8152fc1b16d6bb06b6"
+    },
+    {
+      "path": "run_unified.sh",
+      "sha256": "4f48cc6c6d145a447a6cc40a58e5f488497ccb2f09269320f65bf0d82cfd6cde"
+    },
+    {
+      "path": "scripts/sign_project.py",
+      "sha256": "100ec279a780cf9e1836ff168126f3932f75b49c45e586e6a0172c4a23220b3b"
+    },
+    {
+      "path": "services/__init__.py",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "services/dazzling_lock.py",
+      "sha256": "50730d4dc6eb8871812b4324f0b02e0be9a3aca52217cec300bf03745aeda55b"
+    },
+    {
+      "path": "services/export_io.py",
+      "sha256": "7ba0eaa6113b5543118370e7c5039f422d8b344bbd9335c2a1cdf2882d925ffc"
+    },
+    {
+      "path": "services/google_tts.py",
+      "sha256": "64d22e51fca385eb51a2ea3c665f9156c4a422a8ae21ca7bbb2030d033d9c699"
+    },
+    {
+      "path": "services/gpu_status.py",
+      "sha256": "f8339eb4a28afbca7ab3d683e4c4057a911dc65a382da59d5e9a16b5ed94800e"
+    },
+    {
+      "path": "services/project_signature.py",
+      "sha256": "d64a7c4641d913589a6dca4b7b75f414ed359559b007906c3e8265283dd69825"
+    },
+    {
+      "path": "services/subtitle_io.py",
+      "sha256": "7ede37fda1ca3f63f02836c3f7b033207ce9e00565b732d8e519a9713c915f8a"
+    },
+    {
+      "path": "services/task_queue.py",
+      "sha256": "2691e2a664947835ca774cbaa61bbaf4aa7401fc6a79e96cc0ef04d8ce28451b"
+    },
+    {
+      "path": "services/text_cleaner.py",
+      "sha256": "ea47d8a1006f865e5bb73fadc2d95c0aec6344384a6336d03597f53ddbc82bac"
+    },
+    {
+      "path": "SETUP_CHO_NGUOI_MOI.md",
+      "sha256": "6418cca75901ba034ac0933007411e0a513992d6da65a49e9728e922d686fa7e"
+    },
+    {
+      "path": "SIGNATURE_DAZZLING.md",
+      "sha256": "5e98f80d96c526f1a28acc7b0711074af4c0570b7aee4e4326b6918383478b8f"
+    },
+    {
+      "path": "START_APP.bat",
+      "sha256": "75c791621fb553227e48bd64a33d4e646355ca94a3ad337d15ef64e5010357e2"
+    },
+    {
+      "path": "START_APP.sh",
+      "sha256": "47020e8c15e7ede8d6ec54472634a1251951210c4fa264a9f1716df29cb016e5"
+    },
+    {
+      "path": "START_HERE.bat",
+      "sha256": "db86bbe900332a14227cd05958a39f6b6fb8eb2f9ab48cebb90108f09ac0cb75"
+    },
+    {
+      "path": "START_HERE.sh",
+      "sha256": "b2762efebccd06cf95e363b214ccde0589c2b23ec0b6627e2d8b215aa2bc3996"
+    },
+    {
+      "path": "STOP_HERE.bat",
+      "sha256": "b9fefa60a78596470cb8263c964f784e90e666b1bba35c5c0a822be3e56aa3da"
+    },
+    {
+      "path": "STOP_HERE.sh",
+      "sha256": "f033a107b7cb391fef62dc4b7fcb695b0eeae97cd827a7feae4dd2043e0dd70c"
+    },
+    {
+      "path": "stop_tool_unix.sh",
+      "sha256": "f9f2f065d57f103f152e81d2b3ac2bd4998ce6aef686e6be1ef67405cad3c574"
+    },
+    {
+      "path": "stop_tool_windows.ps1",
+      "sha256": "df6bf5e82847354731a48eda09c6e556e47e66e4a9fedcef7a5ddcb5dbfaf21e"
+    },
+    {
+      "path": "tts-key-google.md",
+      "sha256": "f652ac17e2aa99177712391584f9f5449d4d53839404dec2149906244165b71e"
+    },
+    {
+      "path": "ui_styles.py",
+      "sha256": "247699692d3318bbc444ee31d7213443ba20963031b474bf459c74b45e05fc61"
+    },
+    {
+      "path": "voices/user_clones/20260705-114926-Giọng-1.json",
+      "sha256": "3bdd1e434843391bb509d091bd0349c8674737807746b0c8cebea24cbae0ddae"
+    },
+    {
+      "path": "workers/kokoro_worker.py",
+      "sha256": "9dca3dfe9b708d7f40f229c41391f9b9640957123be7bc8fe76e572bc434f3a2"
+    },
+    {
+      "path": "workers/vieneu_worker.py",
+      "sha256": "b3df3d2896895495297ae5d02547ad61db4b77807564e91ee4d35492c7945a45"
+    }
+  ],
+  "payload_digest": "d2235b20fa0b14ae35d6ea098643a29a6747666310dbac1492d2fc828138b13d",
+  "signature": "MXVXeZqZv9lyJDZj/cescNM96ZMnEcw6rcI0sybUIYwe0wd51/9MWEEsCmbIS2D9U2GV7QRAc7Vep3SIds4aDw=="
+}

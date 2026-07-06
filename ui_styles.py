@@ -112,6 +112,48 @@ body,
   margin-top: 5px;
 }
 
+.dazzling-signature-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -8px 0 22px;
+  padding: 10px 12px;
+  border: 1px solid #d7e2ef;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #f8fbff 0%, #eef6f3 100%);
+  color: var(--ink);
+}
+
+.dazzling-signature-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: #0f172a;
+  color: #f8d36b;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.dazzling-signature-badge strong,
+.dazzling-signature-badge small {
+  display: block;
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+
+.dazzling-signature-badge strong {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.dazzling-signature-badge small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .nav-radio {
   border: 0 !important;
   padding: 0 !important;
